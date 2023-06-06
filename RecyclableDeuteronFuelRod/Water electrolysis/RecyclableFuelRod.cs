@@ -17,7 +17,7 @@ namespace RecyclableFuelRod
 {
     [BepInDependency("me.xiaoye97.plugin.Dyson.LDBTool", BepInDependency.DependencyFlags.HardDependency)]
     [BepInDependency("dsp.common-api.CommonAPI", BepInDependency.DependencyFlags.HardDependency)]
-    [BepInPlugin("Gnimaerd.DSP.plugin.RecyclableFuelRod", "RecyclableFuelRod", "1.1")]
+    [BepInPlugin("Gnimaerd.DSP.plugin.RecyclableFuelRod", "RecyclableFuelRod", "2.0")]
     [CommonAPISubmoduleDependency(nameof(ProtoRegistry), nameof(TabSystem))]
     public class RecyclableFuelRod : BaseUnityPlugin
     {
