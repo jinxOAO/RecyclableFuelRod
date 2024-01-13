@@ -12,6 +12,8 @@ using System.Reflection.Emit;
 using CommonAPI;
 using CommonAPI.Systems;
 using System.IO;
+using CommonAPI.Systems.ModLocalization;
+using System.Security.Cryptography;
 
 namespace RecyclableFuelRod
 {
@@ -71,14 +73,14 @@ namespace RecyclableFuelRod
                 RelatedGenerators.Add(2210);
             }
 
-            LDBTool.PreAddDataAction += AddTranslateDInj;
-            LDBTool.PreAddDataAction += AddTranslateEptD;
+            AddTranslateDInj();
+            AddTranslateEptD();
             LDBTool.PreAddDataAction += AddDeutRods;
 
             if (true)
             {
-                LDBTool.PreAddDataAction += AddTranslateAInj;
-                LDBTool.PreAddDataAction += AddTranslateEptA;
+                AddTranslateAInj();
+                AddTranslateEptA();
                 LDBTool.PostAddDataAction += AddAntiRods;
             }
 
@@ -421,101 +423,9 @@ namespace RecyclableFuelRod
             }
 
             return true;
-
-            //以下是本来想直接覆盖的原函数，逻辑是每次刚开始消耗燃料棒就返还空燃料棒，但是会影响其他mod（指RecycleAccumulator）因此放弃该方案
-            /*
-            __instance.ClearEnergyChange();
-            __instance.ClearChargerDevice();
-            double num = __instance.corePowerGen * dt;
-            __instance.coreEnergy += num;
-            if (__instance.coreEnergy > __instance.coreEnergyCap)
-            {
-                __instance.coreEnergy = __instance.coreEnergyCap;
-            }
-            __instance.MarkEnergyChange(0, num);
-            double num2 = 1.0;
-            ItemProto itemProto = (__instance.reactorItemId > 0) ? LDB.items.Select(__instance.reactorItemId) : null;
-            if (itemProto != null)
-            {
-                num2 = (double)(itemProto.ReactorInc + 1f);
-                if (__instance.reactorItemInc > 0)
-                {
-                    if (itemProto.Productive)
-                    {
-                        num2 *= 1.0 + Cargo.incTableMilli[__instance.reactorItemInc];
-                    }
-                    else
-                    {
-                        num2 *= 1.0 + Cargo.accTableMilli[__instance.reactorItemInc];
-                    }
-                }
-            }
-            double num3 = __instance.coreEnergyCap - __instance.coreEnergy;
-            double num4 = __instance.reactorPowerGen * num2 * dt;
-            if (num4 > num3)
-            {
-                num4 = num3;
-            }
-            while (__instance.reactorEnergy < num4)
-            {
-                int num5 = 0;
-                int num6 = 1;
-                int num7;
-                __instance.reactorStorage.TakeTailItems(ref num5, ref num6, out num7, false);
-                if (num6 <= 0 || num5 <= 0)
-                {
-                    __instance.reactorItemId = 0;
-                    __instance.reactorItemInc = 0;
-                    break;
-                }
-                __instance.AddConsumptionStat(num5, num6, __instance.player.nearestFactory);
-                __instance.reactorItemId = num5;
-                ItemProto itemProto2 = LDB.items.Select(num5);
-                __instance.reactorItemInc = ((num7 > 10) ? 10 : num7);
-                //下面返还空燃料棒
-                if (OriRods.Contains(num5))
-                {
-                    int v;
-                    int outinc;
-                    if ((v = __instance.player.package.AddItemStacked(num5 - 1802 + 9451, 1, __instance.reactorItemInc, out outinc)) != 0)
-                    {
-                        UIItemup.Up(num5 - 1802 + 9451, v);
-                    }
-                }
-                if (itemProto2 != null)
-                {
-                    __instance.reactorEnergy += (double)itemProto2.HeatValue * (1.0 + (itemProto2.Productive ? Cargo.incTableMilli[__instance.reactorItemInc] : 0.0));
-                }
-                __instance.player.controller.gameData.history.AddFeatureValue(2100000 + num5, num6);
-            }
-            if (__instance.reactorEnergy > 0.0)
-            {
-                __instance.MarkEnergyChange(1, __instance.reactorPowerGen * num2 * dt);
-                if (num4 > __instance.reactorEnergy)
-                {
-                    num4 = __instance.reactorEnergy;
-                }
-                __instance.coreEnergy += num4;
-                __instance.reactorEnergy -= num4;
-            }
-            return false;
-            */
         }
 
 
-
-
-        /*
-        [HarmonyPrefix]
-        [HarmonyPatch(typeof(PowerGeneratorComponent), "EnergyCap_Fuel")]
-        public static bool EnergyCap_Fuel_Patch(ref PowerGeneratorComponent __instance, ref long __result)
-        {
-            long num = ((__instance.fuelCount <= 0 || __instance.fuelId == 1101 ) && __instance.fuelEnergy < __instance.useFuelPerTick) ? (__instance.fuelEnergy * __instance.genEnergyPerTick / __instance.useFuelPerTick) : __instance.genEnergyPerTick;
-            __instance.capacityCurrentTick = num;
-            __result = __instance.capacityCurrentTick;
-            return false;
-        }
-        */
         void AddDeutRods()
         {
 
@@ -529,7 +439,7 @@ namespace RecyclableFuelRod
             //ARod._iconSprite = iconEptA;
             //Traverse.Create(ARod).Field("_iconSprite").SetValue(iconEptA);
 
-            RecipeProto DRodRefill = ProtoRegistry.RegisterRecipe(458, ERecipeType.Assemble, 360, new int[] { 9451, 1121 }, new int[] { 1, 10 }, new int[] { 1802 }, new int[] { 1 }, "氘核燃料棒再灌注描述", 1416, 1611, "氘核燃料棒再灌注", "Assets/Recycle/DeutInject");
+            RecipeProto DRodRefill = ProtoRegistry.RegisterRecipe(458, ERecipeType.Assemble, 360, new int[] { 9451, 1121 }, new int[] { 1, 10 }, new int[] { 1802 }, new int[] { 1 }, "氘核燃料棒再灌注描述", 1416, 511 + pagenum * 1000, "氘核燃料棒再灌注", "Assets/Recycle/DeutInject");
             DRodRefill.Explicit = true;
             //DRodRefill._iconSprite = iconDeutInject;
             //Traverse.Create(DRodRefill).Field("_iconSprite").SetValue(iconDeutInject);
@@ -538,7 +448,7 @@ namespace RecyclableFuelRod
             //DRodRecipe._iconSprite = iconEptD;
             //Traverse.Create(DRodRecipe).Field("_iconSprite").SetValue(iconEptD);
 
-            RecipeProto ARodRefill = ProtoRegistry.RegisterRecipe(459, ERecipeType.Assemble, 720, new int[] { 1122, 1120, 9452 }, new int[] { 6, 6, 1 }, new int[] { 1803 }, new int[] { 1 }, "反物质燃料棒再灌注描述", 1145, 1612, "反物质燃料棒再灌注", "Assets/Recycle/AntiInject");
+            RecipeProto ARodRefill = ProtoRegistry.RegisterRecipe(459, ERecipeType.Assemble, 720, new int[] { 1122, 1120, 9452 }, new int[] { 6, 6, 1 }, new int[] { 1803 }, new int[] { 1 }, "反物质燃料棒再灌注描述", 1145, 512 + pagenum * 1000, "反物质燃料棒再灌注", "Assets/Recycle/AntiInject");
             ARodRefill.Explicit = true;
             //ARodRefill._iconSprite = iconAntiInject;
             //Traverse.Create(ARodRefill).Field("_iconSprite").SetValue(iconAntiInject);
@@ -547,70 +457,8 @@ namespace RecyclableFuelRod
             //ARodRecipe._iconSprite = iconEptA;
             //Traverse.Create(ARodRecipe).Field("_iconSprite").SetValue(iconEptA);
 
-            ProtoRegistry.RegisterString("不相符的物品gm", "Item not match.", "物品不相符。");
             return;
 
-            var oriRecipe = LDB.recipes.Select(41);
-            var oriItem = LDB.items.Select(1802);
-
-            //D
-            var DInjectRecipe = oriRecipe.Copy();
-            var EptDRodRecipe = oriRecipe.Copy();
-            var EptDRod = oriItem.Copy();
-
-            DInjectRecipe.ID = 458;
-            DInjectRecipe.Explicit = true;
-            DInjectRecipe.Name = "氘核燃料棒再灌注";
-            DInjectRecipe.name = "氘核燃料棒再灌注".Translate();
-            DInjectRecipe.Description = "氘核燃料棒再灌注描述";
-            DInjectRecipe.description = "氘核燃料棒再灌注描述".Translate();
-            DInjectRecipe.Items = new int[] { 9451, 1121 };
-            DInjectRecipe.ItemCounts = new int[] { 1, 10 };
-            DInjectRecipe.Results = new int[] { 1802 };
-            DInjectRecipe.ResultCounts = new int[] { 1 };
-            DInjectRecipe.GridIndex = 1611;
-            DInjectRecipe.TimeSpend = 360;
-            //DInjectRecipe.SID = "2509";
-            //DInjectRecipe.sid = "2509".Translate();
-            Traverse.Create(DInjectRecipe).Field("_iconSprite").SetValue(iconDeutInject);
-            DInjectRecipe.preTech = LDB.techs.Select(1416);
-
-
-            EptDRodRecipe.ID = 460;
-            EptDRodRecipe.Name = "空的氘核燃料棒";
-            EptDRodRecipe.name = "空的氘核燃料棒".Translate();
-            EptDRodRecipe.Description = "空的氘核燃料棒描述";
-            EptDRodRecipe.description = "空的氘核燃料棒描述".Translate();
-            EptDRodRecipe.Items = new int[] { 1107, 1205 };
-            EptDRodRecipe.ItemCounts = new int[] { 1, 1 };
-            EptDRodRecipe.Results = new int[] { 9451 };
-            EptDRodRecipe.ResultCounts = new int[] { 2 };
-            EptDRodRecipe.GridIndex = 611 + pagenum * 1000;
-            EptDRodRecipe.TimeSpend = 720;
-            Traverse.Create(EptDRodRecipe).Field("_iconSprite").SetValue(iconEptD);
-
-            EptDRod.ID = 9451;
-            EptDRod.Name = "空的氘核燃料棒";
-            EptDRod.name = "空的氘核燃料棒".Translate();
-            EptDRod.Description = "空的氘核燃料棒描述";
-            EptDRod.description = "空的氘核燃料棒描述".Translate();
-            EptDRod.GridIndex = 611 + pagenum * 1000;
-            EptDRod.HeatValue = 0L;
-
-            EptDRod.handcraft = EptDRodRecipe;
-            EptDRod.handcrafts = new List<RecipeProto> { EptDRodRecipe };
-            EptDRod.maincraft = EptDRodRecipe;
-            EptDRod.recipes = new List<RecipeProto> { EptDRodRecipe };
-
-            EptDRod.makes = new List<RecipeProto> { DInjectRecipe };
-            Traverse.Create(EptDRod).Field("_iconSprite").SetValue(iconEptD);
-
-
-            LDBTool.PostAddProto(ProtoType.Item, EptDRod);
-            LDBTool.PostAddProto(ProtoType.Recipe, DInjectRecipe);
-            LDBTool.PostAddProto(ProtoType.Recipe, EptDRodRecipe);
-
-            oriItem.recipes.Add(DInjectRecipe);
 
         }
 
@@ -618,71 +466,20 @@ namespace RecyclableFuelRod
         void AddAntiRods()
         {
             return;
-            var oriRecipe = LDB.recipes.Select(44);
-            var oriItem = LDB.items.Select(1803);
-
-            //D
-            var AInjectRecipe = oriRecipe.Copy();
-            var EptARodRecipe = oriRecipe.Copy();
-            var EptARod = oriItem.Copy();
-
-            AInjectRecipe.ID = 459;
-            AInjectRecipe.Explicit = true;
-            AInjectRecipe.Name = "反物质燃料棒再灌注";
-            AInjectRecipe.name = "反物质燃料棒再灌注".Translate();
-            AInjectRecipe.Description = "反物质燃料棒再灌注描述";
-            AInjectRecipe.description = "反物质燃料棒再灌注描述".Translate();
-            AInjectRecipe.Items = new int[] { 1122, 1120, 9452 };
-            AInjectRecipe.ItemCounts = new int[] { 6, 6, 1 };
-            AInjectRecipe.Results = new int[] { 1803 };
-            AInjectRecipe.ResultCounts = new int[] { 1 };
-            AInjectRecipe.GridIndex = 1612;
-            AInjectRecipe.TimeSpend = 720;
-            //AInjectRecipe.SID = "2509";
-            //AInjectRecipe.sid = "2509".Translate();
-            Traverse.Create(AInjectRecipe).Field("_iconSprite").SetValue(iconAntiInject);
-            AInjectRecipe.preTech = LDB.techs.Select(1145);
-
-            EptARodRecipe.ID = 461;
-            EptARodRecipe.Name = "空的反物质燃料棒";
-            EptARodRecipe.name = "空的反物质燃料棒".Translate();
-            EptARodRecipe.Description = "空的反物质燃料棒描述";
-            EptARodRecipe.description = "空的反物质燃料棒描述".Translate();
-            EptARodRecipe.Items = new int[] { 1107, 1403 };
-            EptARodRecipe.ItemCounts = new int[] { 1, 1 };
-            EptARodRecipe.Results = new int[] { 9452 };
-            EptARodRecipe.ResultCounts = new int[] { 2 };
-            EptARodRecipe.GridIndex = 612 + pagenum * 1000;
-            EptARodRecipe.TimeSpend = 1440;
-            Traverse.Create(EptARodRecipe).Field("_iconSprite").SetValue(iconEptA);
-
-
-            EptARod.ID = 9452;
-            EptARod.Name = "空的反物质燃料棒";
-            EptARod.name = "空的反物质燃料棒".Translate();
-            EptARod.Description = "空的反物质燃料棒描述";
-            EptARod.description = "空的反物质燃料棒描述".Translate();
-            EptARod.GridIndex = 612 + pagenum * 1000;
-            EptARod.HeatValue = 0L;
-
-            EptARod.handcraft = EptARodRecipe;
-            EptARod.handcrafts = new List<RecipeProto> { EptARodRecipe };
-            EptARod.maincraft = EptARodRecipe;
-            EptARod.recipes = new List<RecipeProto> { EptARodRecipe };
-
-            EptARod.makes = new List<RecipeProto> { AInjectRecipe };
-            Traverse.Create(EptARod).Field("_iconSprite").SetValue(iconEptA);
-
-
-            LDBTool.PostAddProto(ProtoType.Item, EptARod);
-            LDBTool.PostAddProto(ProtoType.Recipe, AInjectRecipe);
-            LDBTool.PostAddProto(ProtoType.Recipe, EptARodRecipe);
-
-            oriItem.recipes.Add(AInjectRecipe);
 
         }
 
+        public class StringProto
+        {
+            public int ID { get; set; }
+            public string name;
+            public string Name;
+            public string ZHCN;
+            public string ENUS;
+            public string FRFR;
 
+            public void RegisterTranslation() => LocalizationModule.RegisterTranslation(Name, ENUS, ZHCN, FRFR);
+        }
 
         void AddTranslateDInj()
         {
@@ -702,9 +499,8 @@ namespace RecyclableFuelRod
             desc.ENUS = "Fill empty deuteron fuel rods with deuterium.";
             desc.FRFR = "Fill empty deuteron fuel rods with deuterium.";
 
-
-            LDBTool.PreAddProto(ProtoType.String, recipeName);
-            LDBTool.PreAddProto(ProtoType.String, desc);
+            recipeName.RegisterTranslation();
+            desc.RegisterTranslation();
         }
 
         void AddTranslateEptD()
@@ -726,8 +522,8 @@ namespace RecyclableFuelRod
             desc2.ENUS = "It was originally a deuteron fuel rod, and then ran out, and it became like this:)";
             desc2.FRFR = "It was originally a deuteron fuel rod, and then ran out, and it became like this:)";
 
-            LDBTool.PreAddProto(ProtoType.String, itemName);
-            LDBTool.PreAddProto(ProtoType.String, desc2);
+            itemName.RegisterTranslation();
+            desc2.RegisterTranslation();
         }
 
         void AddTranslateAInj()
@@ -749,8 +545,9 @@ namespace RecyclableFuelRod
             desc.FRFR = "Use hydrogen and antimatter hydrogen to fill empty antimatter fuel rods.";
 
 
-            LDBTool.PreAddProto(ProtoType.String, recipeName);
-            LDBTool.PreAddProto(ProtoType.String, desc);
+
+            recipeName.RegisterTranslation();
+            desc.RegisterTranslation();
         }
 
         void AddTranslateEptA()
@@ -780,10 +577,12 @@ namespace RecyclableFuelRod
             tabname.ENUS = "Fract/Rods";
             tabname.FRFR = "Fract/Rods";
 
+            itemName.RegisterTranslation();
+            desc2.RegisterTranslation();
+            tabname.RegisterTranslation();
 
-            LDBTool.PreAddProto(ProtoType.String, itemName);
-            LDBTool.PreAddProto(ProtoType.String, desc2);
-            LDBTool.PreAddProto(tabname);
+
+            LocalizationModule.RegisterTranslation("不相符的物品gm", "Item not match", "物品不相符", "Item not match");
         }
     }
 

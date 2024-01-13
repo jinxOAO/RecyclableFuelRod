@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using HarmonyLib;
+using UITools;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -38,6 +39,7 @@ namespace RecyclableFuelRod
                 emptyRodIconObj = GameObject.Instantiate(oriIconObj, parent);
                 emptyRodIconObj.transform.localScale = Vector3.one;
                 emptyRodIcon = emptyRodIconObj.GetComponent<Image>();
+                emptyRodIcon.enabled = true;
                 emptyRodCount = emptyRodIconObj.transform.Find("cnt-text").GetComponent<Text>();
                 emptyRodCount.fontSize = 16; // 12被缩放到0.75后反向改字号缩放回原本大小
 
