@@ -20,7 +20,7 @@ namespace RecyclableFuelRod
     [BepInDependency("me.xiaoye97.plugin.Dyson.LDBTool", BepInDependency.DependencyFlags.HardDependency)]
     [BepInDependency("dsp.common-api.CommonAPI", BepInDependency.DependencyFlags.HardDependency)]
     [BepInPlugin("Gnimaerd.DSP.plugin.RecyclableFuelRod", "RecyclableFuelRod", "2.0")]
-    [CommonAPISubmoduleDependency(nameof(ProtoRegistry), nameof(TabSystem))]
+    [CommonAPISubmoduleDependency(nameof(ProtoRegistry), nameof(TabSystem), nameof(LocalizationModule))]
     public class RecyclableFuelRod : BaseUnityPlugin
     {
         private Sprite iconAntiInject;
@@ -36,6 +36,18 @@ namespace RecyclableFuelRod
         public static int pagenum = 3;
 
         public static ResourceData resources;
+
+        public static void EditProductive(Proto proto)
+        {
+            if (proto is RecipeProto)
+            {
+                if (proto.ID == 458 || proto.ID == 459)
+                {
+                    var rp = proto as RecipeProto;
+                    Traverse.Create(rp).Property("productive").SetValue(true);
+                }
+            }
+        }
 
         public void Awake()
         {
@@ -76,6 +88,7 @@ namespace RecyclableFuelRod
             AddTranslateDInj();
             AddTranslateEptD();
             LDBTool.PreAddDataAction += AddDeutRods;
+            //LDBTool.EditDataAction += EditProductive;
 
             if (true)
             {
@@ -88,7 +101,7 @@ namespace RecyclableFuelRod
             //harmony.PatchAll(typeof(Patch_Mecha_GenerateEnergy));
             Harmony.CreateAndPatchAll(typeof(RecyclableFuelRod));
             Harmony.CreateAndPatchAll(typeof(UIPatchers));
-
+            LDBTool.EditDataAction += EditProductive;
         }
 
         public void Start()
@@ -98,21 +111,32 @@ namespace RecyclableFuelRod
 
 
         [HarmonyPrefix]
-        [HarmonyPatch(typeof(PlanetFactory), "InsertInto")]
-        public static bool InsertIntoPatch(PlanetFactory __instance, int entityId, int itemId, ref byte itemCount, ref byte itemInc, out byte remainInc, ref int __result)
+        [HarmonyPatch(typeof(PlanetFactory), "InsertInto", new Type[] { typeof(uint), typeof(int), typeof(int), typeof(byte), typeof(byte), typeof(byte) }, new ArgumentType[] { ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Out })]
+        public static bool InsertIntoPatch(PlanetFactory __instance, uint ioTargetTypedId, int offset, int itemId, ref byte itemCount, ref byte itemInc, out byte remainInc, ref int __result)
         {
             remainInc = itemInc;
-            int beltId = __instance.entityPool[entityId].beltId;
-            if (beltId > 0)
-            {
-                return true;
-            }
+            int num = (int)(ioTargetTypedId & 16777215u);
+            EFactoryIOTargetType efactoryIOTargetType = (EFactoryIOTargetType)(ioTargetTypedId & 4278190080u);
 
-            int powerGenId = __instance.entityPool[entityId].powerGenId;
-            int protoId_h = __instance.entityPool[entityId].protoId;
-            int[] array = __instance.entityNeeds[entityId];
-            if (powerGenId > 0)
+            //remainInc = itemInc;
+            //int beltId = __instance.entityPool[entityId].beltId;
+            //if (beltId > 0)
+            //{
+            //    return true;
+            //}
+            if (efactoryIOTargetType == EFactoryIOTargetType.PowerGen)
             {
+                ref PowerGeneratorComponent ptr4 = ref __instance.powerSystem.genPool[num];
+                if (ptr4.id <= 0)
+                {
+                    __result = 0;
+                    return false;
+                }
+                int powerGenId = num;
+                int entityId = ptr4.entityId;
+                int protoId_h = __instance.entityPool[entityId].protoId;
+                int[] array = __instance.entityNeeds[entityId];
+
                 PowerGeneratorComponent[] genPool = __instance.powerSystem.genPool;
                 if (!RelatedGenerators.Contains(protoId_h))//如果不是相关的发电厂建筑，则不patch，执行原函数
                 {
@@ -162,7 +186,7 @@ namespace RecyclableFuelRod
                     // 爪子里是空棒待送入（这里没有对发电厂的类型和抓来的空棒类型作判断可能会发生空的氘核燃料棒被试图或者真的抓入小太阳里，但这种情况无需特殊处理来避免卡死，毕竟谁会串联核电站和小太阳呢？就算串联了，卡死和不卡死都没区别，都是无法工作的。
                     // 针对可能的把空氘棒放入小太阳然后下次小太阳消耗黑棒的时候骗取黑棒（+1的同时会改productHeat）的问题，已在GenEnergyByFuelPatch中做了防备
                     // 这里暂时不判断数量了
-                    else if (EmptyRods.Contains(itemId) && (genPool[powerGenId].productHeat == 0 || genPool[powerGenId].productHeat == itemId)) 
+                    else if (EmptyRods.Contains(itemId) && (genPool[powerGenId].productHeat == 0 || genPool[powerGenId].productHeat == itemId))
                     {
                         PowerGeneratorComponent[] array4 = genPool;
                         int num12 = powerGenId;
@@ -177,7 +201,6 @@ namespace RecyclableFuelRod
                 }
                 __result = 0;
                 return false;
-
 
             }
             else
@@ -290,7 +313,7 @@ namespace RecyclableFuelRod
         /// <param name="inc"></param>
         /// <returns></returns>
         [HarmonyPrefix]
-        [HarmonyPatch(typeof(PowerGeneratorComponent), "PickFuelFrom")]
+        [HarmonyPatch(typeof(PowerGeneratorComponent), "PickFuelFrom", new Type[] { typeof(int), typeof(int)}, new ArgumentType[] { ArgumentType.Normal, ArgumentType.Out})]
         public static bool PickFuelFromPatch(ref PowerGeneratorComponent __instance, ref int __result, int filter, out int inc)
         {
 
@@ -331,46 +354,132 @@ namespace RecyclableFuelRod
             return true;
         }
 
-
         [HarmonyPrefix]
-        [HarmonyPatch(typeof(PlanetFactory), "PickFrom")]
-        public static bool PickFromPatch(ref PlanetFactory __instance, ref int __result, int entityId, int offset, int filter, int[] needs, out byte stack, out byte inc)
+        [HarmonyPatch(typeof(PlanetFactory), "PickFuelForPowerGenFrom")]
+        public static bool PickFuelForPowerGenFrom(ref PlanetFactory __instance, ref int __result, uint pickTargetTypedId, int insertPowerGenId, int offset, int filter, out byte stack, out byte inc, out bool fuelFull)
         {
             stack = 1;
             inc = 0;
-            int beltId = __instance.entityPool[entityId].beltId;
-            if (beltId > 0)
+            fuelFull = false;
+            __result = 0;
+            if (insertPowerGenId == 0 || __instance.powerSystem.genPool[insertPowerGenId].id != insertPowerGenId)
+            {
+                __result = 0;
+                return false;
+            }
+            int fuelId = (int)__instance.powerSystem.genPool[insertPowerGenId].fuelId;
+            int fuelMask = (int)__instance.powerSystem.genPool[insertPowerGenId].fuelMask;
+            if (fuelId > 0 && filter > 0 && fuelId != filter)
+            {
+                __result = 0;
+                return false;
+            }
+            if ((pickTargetTypedId & 4278190080u) == 134217728u)
+            {
+                int num5 = (int)(pickTargetTypedId & 16777215u);
+                ref PowerGeneratorComponent ptr2 = ref __instance.powerSystem.genPool[num5];
+                Mutex obj = __instance.entityMutexs[ptr2.entityId];
+                lock (obj)
+                {
+                    if (__instance.powerSystem.genPool[insertPowerGenId].fuelCount <= 8)
+                    {
+                        int num4;
+                        int result2;
+                        if (fuelId > 0)
+                        {
+                            result2 = ptr2.PickFuelFrom(fuelId, out num4);
+                        }
+                        else
+                        {
+                            int fuelMask2 = (int)ptr2.fuelMask;
+                            if ((fuelMask2 & fuelMask) == 0)
+                            {
+                                __result = 0;
+                                return false;
+                            }
+                            if ((fuelMask2 & fuelMask) == fuelMask2)
+                            {
+                                result2 = ptr2.PickFuelFrom(filter, out num4);
+                            }
+                            else
+                            {
+                                result2 = ptr2.PickFuelFrom(filter, fuelMask, out num4);
+                            }
+                        }
+                        inc = (byte)num4;
+                        __result = result2;
+                        return false;
+                    }
+                    else
+                    {
+                        fuelFull = true;
+                        if (EmptyRods.Contains(filter) || filter == 0)
+                        {
+                            int num3;
+                            int result3 = ptr2.PickFuelFrom(-1, out num3); // 这里传入filter为-1告诉pickFuelFrom的patch，不要抓满的燃料棒，只能抓空棒
+                            inc = (byte)num3;
+                            __result = result3;
+                            if (result3 > 0)
+                                fuelFull = false;
+                            return false;
+                        }
+                    }
+                }
+                return false;
+            }
+            else
             {
                 return true;
             }
+        }
 
-            int powerGenId = __instance.entityPool[entityId].powerGenId;
-            if (powerGenId > 0 && RelatedGenerators.Contains(__instance.entityPool[entityId].protoId))//这里删掉了offset的判断
+
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(PlanetFactory), "PickFrom", new Type[] { typeof(uint), typeof(int), typeof(int), typeof(int[]), typeof(byte), typeof(byte) }, new ArgumentType[] { ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Out, ArgumentType.Out })]
+        public static bool PickFromPatch(ref PlanetFactory __instance, ref int __result, uint ioTargetTypedId, int offset, int filter, int[] needs, out byte stack, out byte inc)
+        {
+            stack = 1;
+            inc = 0;
+            int num = (int)(ioTargetTypedId & 16777215u);
+            EFactoryIOTargetType efactoryIOTargetType = (EFactoryIOTargetType)(ioTargetTypedId & 4278190080u);
+            if (efactoryIOTargetType == EFactoryIOTargetType.PowerGen)
             {
-                Mutex obj = __instance.entityMutexs[entityId];
-                lock (obj)
+                ref PowerGeneratorComponent ptr4 = ref __instance.powerSystem.genPool[num];
+                if (ptr4.id < 0)
                 {
-                    // 如果爪子的另一端连接了另一个发电机，这里不判断该发电机的类型是否相符了，一般不会有人把两个不同类的发电机连起来。即使真的有人这样做了，正常的游戏逻辑也无法把燃料放进去，所以不需要判断了。
-                    if (offset > 0 && __instance.powerSystem.genPool[offset].id == offset)
+                    __result = 0;
+                    return false;
+                }
+                int entityId = ptr4.entityId;
+                int protoId = __instance.entityPool[entityId].protoId;
+                if(RelatedGenerators.Contains(__instance.entityPool[entityId].protoId))
+                {
+                    Mutex obj = __instance.entityMutexs[entityId];
+                    lock (obj)
                     {
-                        if (__instance.powerSystem.genPool[offset].fuelCount <= 8)
+                        // 如果爪子的另一端连接了另一个发电机，这里不判断该发电机的类型是否相符了，一般不会有人把两个不同类的发电机连起来。即使真的有人这样做了，正常的游戏逻辑也无法把燃料放进去，所以不需要判断了。
+                        if (offset > 0 && __instance.powerSystem.genPool[offset].id == offset)
+                        {
+                            if (__instance.powerSystem.genPool[offset].fuelCount <= 8)
+                            {
+                                int num3;
+                                int result3 = ptr4.PickFuelFrom(filter, out num3);
+                                inc = (byte)num3;
+                                __result = result3;
+                                return false;
+                            }
+                        }
+                        // 能进行到这里，代表前面没成功return false，代表爪子的另一端不是发电机，或者爪子另一端的燃料棒数量足够（9及以上）那么这种情况下，只抓空棒
+                        if (EmptyRods.Contains(filter) || filter == 0)
                         {
                             int num3;
-                            int result3 = __instance.powerSystem.genPool[powerGenId].PickFuelFrom(filter, out num3);
+                            int result3 = ptr4.PickFuelFrom(-1, out num3); // 这里传入filter为-1告诉pickFuelFrom的patch，不要抓满的燃料棒，只能抓空棒
                             inc = (byte)num3;
                             __result = result3;
                             return false;
                         }
                     }
-                    // 能进行到这里，代表前面没成功return false，代表爪子的另一端不是发电机，或者爪子另一端的燃料棒数量足够（9及以上）那么这种情况下，只抓空棒
-                    if (EmptyRods.Contains(filter) || filter == 0)
-                    {
-                        int num3;
-                        int result3 = __instance.powerSystem.genPool[powerGenId].PickFuelFrom(-1, out num3); // 这里传入filter为-1告诉pickFuelFrom的patch，不要抓满的燃料棒，只能抓空棒
-                        inc = (byte)num3;
-                        __result = result3;
-                        return false;
-                    }
+
                 }
             }
             else
@@ -379,6 +488,55 @@ namespace RecyclableFuelRod
             }
             return true;
         }
+
+
+        //[HarmonyPrefix]
+        //[HarmonyPatch(typeof(PlanetFactory), "PickFrom")]
+        //public static bool PickFromPatch(ref PlanetFactory __instance, ref int __result, int entityId, int offset, int filter, int[] needs, out byte stack, out byte inc)
+        //{
+        //    stack = 1;
+        //    inc = 0;
+        //    int beltId = __instance.entityPool[entityId].beltId;
+        //    if (beltId > 0)
+        //    {
+        //        return true;
+        //    }
+
+        //    int powerGenId = __instance.entityPool[entityId].powerGenId;
+        //    if (powerGenId > 0 && RelatedGenerators.Contains(__instance.entityPool[entityId].protoId))//这里删掉了offset的判断
+        //    {
+        //        Mutex obj = __instance.entityMutexs[entityId];
+        //        lock (obj)
+        //        {
+        //            // 如果爪子的另一端连接了另一个发电机，这里不判断该发电机的类型是否相符了，一般不会有人把两个不同类的发电机连起来。即使真的有人这样做了，正常的游戏逻辑也无法把燃料放进去，所以不需要判断了。
+        //            if (offset > 0 && __instance.powerSystem.genPool[offset].id == offset)
+        //            {
+        //                if (__instance.powerSystem.genPool[offset].fuelCount <= 8)
+        //                {
+        //                    int num3;
+        //                    int result3 = __instance.powerSystem.genPool[powerGenId].PickFuelFrom(filter, out num3);
+        //                    inc = (byte)num3;
+        //                    __result = result3;
+        //                    return false;
+        //                }
+        //            }
+        //            // 能进行到这里，代表前面没成功return false，代表爪子的另一端不是发电机，或者爪子另一端的燃料棒数量足够（9及以上）那么这种情况下，只抓空棒
+        //            if (EmptyRods.Contains(filter) || filter == 0)
+        //            {
+        //                int num3;
+        //                int result3 = __instance.powerSystem.genPool[powerGenId].PickFuelFrom(-1, out num3); // 这里传入filter为-1告诉pickFuelFrom的patch，不要抓满的燃料棒，只能抓空棒
+        //                inc = (byte)num3;
+        //                __result = result3;
+        //                return false;
+        //            }
+        //        }
+        //    }
+        //    else
+        //    {
+        //        return true;
+        //    }
+        //    return true;
+        //}
 
 
         [HarmonyPrefix]
@@ -426,7 +584,30 @@ namespace RecyclableFuelRod
         }
 
 
-        void AddDeutRods()
+
+        //[HarmonyPostfix]
+        //[HarmonyPatch(typeof(GameSave), "LoadCurrentGame")]
+        //public static void LoadPostPatch()
+        //{
+        //    try
+        //    {
+        //        RecipeProto r458 = LDB.recipes.Select(458);
+        //        Traverse.Create(r458).Field("productive").SetValue(true);
+
+        //        //r458.SetPropertyValue<bool>("productive", true);
+        //        RecipeProto r459 = LDB.recipes.Select(459);
+        //        //r459.SetFieldValue<bool>("productive", true);
+        //        r458.ItemCounts = new int[] { 100, 100 };
+
+        //    }
+        //    catch (Exception)
+        //    {
+        //    }
+        //}
+
+
+
+        public static void AddDeutRods()
         {
 
             var icondesc = ProtoRegistry.GetDefaultIconDesc(new Color(1f, 1f, 1f), new Color(0f, 1f, 1f), new Color(0, 0.2f, 0.3f), new Color(0, 0.4f, 0.5f));
@@ -441,6 +622,7 @@ namespace RecyclableFuelRod
 
             RecipeProto DRodRefill = ProtoRegistry.RegisterRecipe(458, ERecipeType.Assemble, 360, new int[] { 9451, 1121 }, new int[] { 1, 10 }, new int[] { 1802 }, new int[] { 1 }, "氘核燃料棒再灌注描述", 1416, 511 + pagenum * 1000, "氘核燃料棒再灌注", "Assets/Recycle/DeutInject");
             DRodRefill.Explicit = true;
+            DRodRefill.NonProductive = false;
             //DRodRefill._iconSprite = iconDeutInject;
             //Traverse.Create(DRodRefill).Field("_iconSprite").SetValue(iconDeutInject);
 
@@ -450,6 +632,7 @@ namespace RecyclableFuelRod
 
             RecipeProto ARodRefill = ProtoRegistry.RegisterRecipe(459, ERecipeType.Assemble, 720, new int[] { 1122, 1120, 9452 }, new int[] { 6, 6, 1 }, new int[] { 1803 }, new int[] { 1 }, "反物质燃料棒再灌注描述", 1145, 512 + pagenum * 1000, "反物质燃料棒再灌注", "Assets/Recycle/AntiInject");
             ARodRefill.Explicit = true;
+            DRodRefill.NonProductive = false;
             //ARodRefill._iconSprite = iconAntiInject;
             //Traverse.Create(ARodRefill).Field("_iconSprite").SetValue(iconAntiInject);
 
